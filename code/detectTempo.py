@@ -1,10 +1,11 @@
+import math as math
 import numpy as np
 import scipy.io.wavfile as wav
 from scipy import signal
 import matplotlib.pyplot as plt
 
 #read the file
-(rate,data)=wav.read('./wav/tap46.wav')
+(rate,data)=wav.read('./wav/signal46.wav')
 
 print(rate)
 #filter bank
@@ -40,6 +41,9 @@ signal16003200 = signal.lfilter(filter16003200n,filter16003200d,data,0)
 signal3200 = signal.lfilter(filter3200n,filter3200d,data,0)
 
 
+signalFilter = [signal200,signal200400,signal400800,signal8001600,signal16003200,signal3200]
+
+
 #show the signal after filter
 """
 t = signal200
@@ -48,14 +52,65 @@ freq = np.fft.fftfreq(t.shape[-1])
 plt.plot(freq, sp.real)
 plt.show()
 """
-wav.write('./output/tap46200.wav',rate,signal200)
 
 #envelope extraction
+window = signal.hann(6400)
+halfHann = window[3200:]
 
-hanningWindow = signal.get_window('hamming',200)
-window = signal.hann(51)
-#plt.plot(window)
-#plt.title("Hann window")
-#plt.ylabel("Amplitude")
-#plt.xlabel("Sample")
-#plt.show()
+convolution = [0,0,0,0,0,0]
+
+#convolution
+for i in range(6):
+	convolution[i] = signal.fftconvolve(signalFilter[i],halfHann)
+
+
+#derivation
+for j in range(6):
+	for i in range(convolution[j].shape[-1]):
+		convolution[j][i]  = (convolution[j][i]- convolution[j][i-1])
+
+#rectify the signal
+for i in range(6):
+	convolution[i] = (np.absolute(convolution[i]) + convolution[i])/2
+
+
+#display the Hann window
+'''
+plt.plot(halfHann)
+plt.title("Hann window")
+plt.ylabel("Amplitude")
+plt.xlabel("Sample")
+plt.show()
+'''
+
+alpha = 0.5
+
+def combFilter(tempo,x):
+	length = x.shape[-1]
+	T = math.floor(60*rate/tempo)
+	comb = [1]*length
+	for i in range(length):
+		if i<T:
+			comb[i]=(1-alpha)*x[i]
+		else :
+			comb[i]=comb[i-T]*alpha+(1-alpha)*x[i]
+	return comb
+
+
+tempoTab = range(40,180)
+energieTempo = [[1]*140,[1]*140,[1]*140,[1]*140,[1]*140,[1]*140]
+
+def energy (x) :
+	somme = 0
+	for i in x :
+		somme = somme + i*i
+	return somme
+
+for i in range(6):
+	for tempo in range(40,180):
+		comb = combFilter(tempo,convolution[i])
+		energieTempo[i][tempo-40] = energy(comb)
+
+for i in range(6):
+	plt.plot(tempoTab,energieTempo[i])
+	plt.show()
